@@ -1,0 +1,40 @@
+{
+  "_note": "Fingerprints (sha256, first 16 hex) of the host contract files this plugin depends on, per verified DSH release. Regenerate with node scripts/fingerprint-dsh-compat.mjs <version>.",
+  "desktop": {
+    "0.2.0-rc.2": "DSH desktop 0.2.0-rc.2 (Electron 44, node 24.21.0, pnpm 11.7.0)",
+    "0.2.1-rc.2": "DSH desktop 0.2.1-rc.2 (nightly, releaseDate 2026-10-17T09:22:23Z)"
+  },
+  "verifiedVersions": [
+    "0.2.0-rc.2",
+    "0.2.1-rc.2"
+  ],
+  "peerRange": "^0.2.0-rc.2 || ^0.2.1-rc.2",
+  "fingerprints": {
+    "0.2.0-rc.2": {
+      "dsh-workspace/lib/index.js": "a33af459cfc7af29",
+      "dsh-session-persistence/lib/index.js": "cc0b6d3a224133af",
+      "dsh-session-persistence-jsonl/lib/index.js": "0845707017acc2b4",
+      "dsh-session-projection-cache/lib/index.js": "797282e86a23ece3",
+      "dsh-session-query/lib/index.js": "dd8056fad008063c",
+      "dsh-api-session-controller/lib/types/list.js": "8535ef4fea3cf71f",
+      "dsh-host-webserver/lib/index.js": "6efea1375eadeff6",
+      "dsh-session/lib/index.js": "87ea85e2fb5318bf",
+      "dsh-client-store/lib/index.js": "7272e501f184fdee",
+      "dsh-client-ui-slots/lib/client.js": "MISSING",
+      "dsh-client-locale/lib/client.js": "bad8fe9bfb07af2a"
+    },
+    "0.2.1-rc.2": {
+      "dsh-workspace/lib/index.js": "931ca0cb10c51020",
+      "dsh-session-persistence/lib/index.js": "cc0b6d3a224133af",
+      "dsh-session-persistence-jsonl/lib/index.js": "973dd78679b2661d",
+      "dsh-session-projection-cache/lib/index.js": "faf307dce5db2fb7",
+      "dsh-session-query/lib/index.js": "76ce2944e561c12f",
+      "dsh-api-session-controller/lib/types/list.js": "a85aa9154e6bc1ec",
+      "dsh-host-webserver/lib/index.js": "08907285802f0edd",
+      "dsh-session/lib/index.js": "2f5dd07cb5c744a2",
+      "dsh-client-store/lib/index.js": "7272e501f184fdee",
+      "dsh-client-ui-slots/lib/client.js": "MISSING",
+      "dsh-client-locale/lib/client.js": "bad8fe9bfb07af2a"
+    }
+  }
+}

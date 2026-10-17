@@ -1,0 +1,60 @@
+name: check
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # pnpm version comes from package.json "packageManager"; passing it here as
+      # well makes pnpm/action-setup fail with a version conflict.
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck (host half)
+        run: pnpm typecheck
+
+      - name: Unit tests
+        run: pnpm test
+
+      - name: Build bundles
+        run: pnpm build
+
+      - name: lib/ must match a fresh build
+        run: |
+          if [ -n "$(git status --porcelain lib)" ]; then
+            echo "::error::lib/ is stale — run 'pnpm build' and commit the result."
+            git --no-pager diff --stat -- lib
+            exit 1
+          fi
+
+      - name: Host bundle declares no runtime dependency
+        run: |
+          if grep -qE "from ['\"]@deepseek-ai" lib/index.js; then
+            echo "::error::lib/index.js imports an @deepseek-ai package at runtime; the host bundle must be self-contained."
+            exit 1
+          fi
+
+      - name: Client bundle is wrapped for the DSH module loader
+        run: |
+          head -2 lib/client.js | grep -q '__ModuleLoader__' || { echo "::error::lib/client.js is not wrapped by window.__ModuleLoader__.load"; exit 1; }
+
+      - name: Compatibility check against the latest DSH release
+        continue-on-error: true
+        run: node scripts/check-dsh-version.mjs --json

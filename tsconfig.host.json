@@ -1,0 +1,11 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "src/index.ts",
+    "src/loopback.ts",
+    "src/move.ts",
+    "src/persistence.ts",
+    "src/projection.ts",
+    "src/routes.ts"
+  ]
+}

@@ -1,0 +1,6 @@
+# dsh-edit-file-workspace bundle patch: inserts the dual-face plugin row into
+# the web profile roster. Host half serves loopback HTTP routes; browser half
+# renders the settings card.
+- insert:
+    - id: dsh-edit-file-workspace
+      name: 'dsh-edit-file-workspace'
