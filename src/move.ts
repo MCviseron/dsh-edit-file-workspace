@@ -36,14 +36,19 @@ export function firstFrameEnd(buf: Buffer): number {
   return offset
 }
 
-/**
- * Replace only the first line (the JSON header) of a zstd JSONL session log.
- *
- * The first frame may carry more than the header line; whatever follows the
- * header inside that frame is re-emitted verbatim so no event is ever dropped
- * when the frame is recompressed.
- */
-export function rewriteHeaderCwd(filePath: string, expectedId: string, cwd: string): void {
+interface ParsedLog {
+  buf: Buffer
+  /** Byte length of the first frame. */
+  end: number
+  /** Decompressed first frame. */
+  plain: Buffer
+  /** Offset of the first newline in `plain`. */
+  lineEnd: number
+  header: StoredSessionHeader
+}
+
+/** Decode and validate the header line of one generation log. Read-only. */
+function parseLog(filePath: string, expectedId: string): ParsedLog {
   const buf = readFileSync(filePath)
   const end = firstFrameEnd(buf)
   const plain = zstdDecompressSync(buf.subarray(0, end))
@@ -60,16 +65,41 @@ export function rewriteHeaderCwd(filePath: string, expectedId: string, cwd: stri
   }
   const record = header as StoredSessionHeader
   if (typeof record.version !== 'number') throw new Error('会话日志头行缺少格式版本: ' + filePath)
-  record.cwd = cwd
-  const rewritten = Buffer.concat([Buffer.from(JSON.stringify(record) + '\n', 'utf8'), plain.subarray(lineEnd + 1)])
+  return { buf, end, plain, lineEnd, header: record }
+}
+
+/**
+ * Read the header of one generation log without writing anything.
+ *
+ * Used as the pre-flight of a move: every check that can reject a file runs
+ * before the directory is renamed, so a rejected move never leaves the session
+ * half-relocated.
+ */
+export function readHeaderLine(filePath: string, expectedId: string): StoredSessionHeader {
+  return parseLog(filePath, expectedId).header
+}
+
+/**
+ * Replace only the first line (the JSON header) of a zstd JSONL session log.
+ *
+ * The first frame may carry more than the header line; whatever follows the
+ * header inside that frame is re-emitted verbatim so no event is ever dropped
+ * when the frame is recompressed.
+ */
+export function rewriteHeaderCwd(filePath: string, expectedId: string, cwd: string): void {
+  const { buf, end, plain, lineEnd, header } = parseLog(filePath, expectedId)
+  header.cwd = cwd
+  const rewritten = Buffer.concat([Buffer.from(JSON.stringify(header) + '\n', 'utf8'), plain.subarray(lineEnd + 1)])
   const out = Buffer.concat([zstdCompressSync(rewritten), buf.subarray(end)])
   const tmp = filePath + '.tmp-' + process.pid + '-' + Date.now()
   writeFileSync(tmp, out)
   try {
     renameSync(tmp, filePath)
   } catch {
-    rmSync(filePath, { force: true })
-    renameSync(tmp, filePath)
+    // Never unlink the log before the replacement is in place: overwrite in
+    // place instead, so a failure can never lose the session.
+    writeFileSync(filePath, out)
+    rmSync(tmp, { force: true })
   }
 }
 
@@ -85,21 +115,9 @@ export interface MoveArtifactsResult {
 /** Canonical format-generation log names: `session.jsonl.zstd`, `session.v4.jsonl.zstd`, ... */
 const GENERATION_LOG = /^session(?:\.v[1-9]\d*)?\.jsonl(?:\.[a-z0-9]+)?$/
 
-/**
- * Rewrite the header of every format generation in one session directory.
- *
- * A session that was never re-opened may still sit at an older generation, and
- * its directory can hold several; leaving any of them on the old `cwd` would let
- * a later migration move the session back.
- */
-function rewriteGenerationHeaders(dir: string, expectedId: string, cwd: string): number {
-  let rewritten = 0
-  for (const name of readdirSync(dir)) {
-    if (!GENERATION_LOG.test(name)) continue
-    rewriteHeaderCwd(join(dir, name), expectedId, cwd)
-    rewritten += 1
-  }
-  return rewritten
+/** Every format generation in one session directory, as absolute paths. */
+function generationLogs(dir: string): string[] {
+  return readdirSync(dir).filter(name => GENERATION_LOG.test(name)).map(name => join(dir, name))
 }
 
 /**
@@ -108,7 +126,9 @@ function rewriteGenerationHeaders(dir: string, expectedId: string, cwd: string):
  *
  * The directory rename keeps every sibling artifact (the log generations and
  * the backend's lock file) together; only the header line inside each log is
- * rewritten.
+ * rewritten. Every generation is validated *before* the rename — a session that
+ * was never re-opened may still sit at an older generation, and leaving any of
+ * them on the old `cwd` would let a later migration move the session back.
  */
 export function moveSessionArtifacts(
   persistence: SessionPersistenceLike,
@@ -125,9 +145,29 @@ export function moveSessionArtifacts(
   if (oldDir === newDir) throw new Error('目标路径与当前路径解析到了同一会话目录')
   if (!existsSync(oldDir)) throw new Error('会话日志目录不存在: ' + oldDir)
   if (existsSync(newDir)) throw new Error('目标位置已存在同名会话目录: ' + newDir)
+
+  const logs = generationLogs(oldDir)
+  if (logs.length === 0) throw new Error('会话目录里没有可改写的日志: ' + oldDir)
+  for (const file of logs) readHeaderLine(file, newHeader.id)
+
   mkdirSync(dirname(newDir), { recursive: true })
   renameSync(oldDir, newDir)
-  const rewritten = rewriteGenerationHeaders(newDir, newHeader.id, newHeader.cwd)
-  if (rewritten === 0) throw new Error('移动后未找到可改写的会话日志: ' + newDir)
-  return { from: oldDir, to: newDir, rewritten }
+  const done: string[] = []
+  try {
+    for (const name of readdirSync(newDir)) {
+      if (!GENERATION_LOG.test(name)) continue
+      const file = join(newDir, name)
+      rewriteHeaderCwd(file, newHeader.id, newHeader.cwd)
+      done.push(file)
+    }
+  } catch (error) {
+    // Undo the partial rewrite first, then the rename: a failure must leave the
+    // session exactly where it was, not half-relocated.
+    for (const file of done) {
+      try { rewriteHeaderCwd(file, newHeader.id, oldHeader.cwd) } catch { /* best effort */ }
+    }
+    try { renameSync(newDir, oldDir) } catch { /* keep the moved directory rather than lose it */ }
+    throw error
+  }
+  return { from: oldDir, to: newDir, rewritten: done.length }
 }

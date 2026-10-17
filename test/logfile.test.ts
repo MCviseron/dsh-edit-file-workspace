@@ -130,3 +130,38 @@ test('same resolved path is a no-op', () => {
   assert.equal(moved.from, moved.to)
   assert.equal(existsSync(file), true)
 })
+
+test('an unreadable generation aborts the move before the directory is renamed', () => {
+  const root = scratch('preflight')
+  const persistence = fakePersistence(root)
+  const oldHeader = { id: 'session-h', cwd: 'C:\\from' }
+  const newHeader = { id: 'session-h', cwd: 'C:\\to' }
+  const oldFile = persistence.locate(oldHeader).path
+  mkdirSync(dirname(oldFile), { recursive: true })
+  // A log whose header names another session: the move must refuse, untouched.
+  writeFileSync(oldFile, zstdCompressSync(Buffer.from(headerLine('session-other', 'C:\\from'))))
+
+  assert.throws(() => moveSessionArtifacts(persistence, oldHeader, newHeader), /不匹配/)
+  assert.equal(existsSync(dirname(oldFile)), true)
+  assert.equal(existsSync(dirname(persistence.locate(newHeader).path)), false)
+})
+
+test('rewrites every format generation in the session directory', () => {
+  const root = scratch('generations')
+  const persistence = fakePersistence(root)
+  const oldHeader = { id: 'session-i', cwd: 'C:\\from' }
+  const newHeader = { id: 'session-i', cwd: 'C:\\to' }
+  const oldDir = dirname(persistence.locate(oldHeader).path)
+  mkdirSync(oldDir, { recursive: true })
+  const historical = join(oldDir, 'session.jsonl.zstd')
+  writeFileSync(historical, zstdCompressSync(Buffer.from(headerLine('session-i', 'C:\\from'))))
+  const current = join(oldDir, 'session.v4.jsonl.zstd')
+  writeFileSync(current, zstdCompressSync(Buffer.from(headerLine('session-i', 'C:\\from'))))
+
+  const moved = moveSessionArtifacts(persistence, oldHeader, newHeader)
+
+  assert.equal(moved.rewritten, 2)
+  for (const file of [join(moved.to, 'session.jsonl.zstd'), join(moved.to, 'session.v4.jsonl.zstd')]) {
+    assert.equal(JSON.parse(readAllFrames(readFileSync(file))[0].split('\n')[0]).cwd, 'C:\\to')
+  }
+})
