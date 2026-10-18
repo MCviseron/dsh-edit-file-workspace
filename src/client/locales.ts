@@ -13,6 +13,10 @@ export const zh = {
   'settings.moved': '已移动',
   'settings.projectionRetagged': '标题与时间已随之迁移',
   'settings.projectionStale': '标题与时间缓存未能重建，打开该会话一次即可恢复',
+  'settings.repairMetadata': '修复标题/时间缓存',
+  'settings.repairing': '修复中…',
+  'settings.repairDone': '缓存已修复',
+  'settings.repairFailedCount': '未能修复',
 } as const
 
 export const en = {
@@ -30,6 +34,10 @@ export const en = {
   'settings.moved': 'Moved',
   'settings.projectionRetagged': 'title and time moved with it',
   'settings.projectionStale': 'title/time cache could not be rebuilt; open the session once to restore it',
+  'settings.repairMetadata': 'Repair title/time cache',
+  'settings.repairing': 'Repairing…',
+  'settings.repairDone': 'Cache repaired',
+  'settings.repairFailedCount': 'failed',
 } as const
 
 export type EditFileWorkspaceKey = keyof typeof zh

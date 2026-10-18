@@ -106,3 +106,59 @@ export async function rebindProjectionCache(
 
   return 'failed'
 }
+
+export interface RepairReport {
+  /** Cold sessions inspected. */
+  scanned: number
+  /** Sessions whose checkpoint was rebuilt for their current identity. */
+  repaired: number
+  /** Sessions already bound (or seeded without a known cut). */
+  alreadyBound: number
+  /** Sessions whose log could not be re-read. */
+  failed: number
+}
+
+/**
+ * Re-bind every cold session whose projection cache no longer matches its header.
+ *
+ * A move that changed `cwd` without re-checkpointing (anything written before
+ * 0.3.0) leaves the row permanently unbound: the listing then shows no title and
+ * a `createdAt` timestamp until that session is opened once. This repairs those
+ * rows in bulk through the same documented cold path, without touching any log
+ * or moving anything: a stale row is fail-soft, so the worst case is a longer
+ * replay the next time the session opens.
+ */
+export async function repairProjectionCaches(
+  host: ProjectionHost,
+  headers: readonly StoredSessionHeader[],
+  concurrency = 4,
+): Promise<RepairReport> {
+  const report: RepairReport = { scanned: headers.length, repaired: 0, alreadyBound: 0, failed: 0 }
+  const cache = host.get('sessionProjectionCache') as ProjectionCacheLike | undefined
+  if (cache === undefined || cache === null) {
+    report.failed = headers.length
+    return report
+  }
+  let next = 0
+  const worker = async (): Promise<void> => {
+    for (;;) {
+      const at = next++
+      if (at >= headers.length) return
+      const header = headers[at]
+      if (header.isSeeded !== true && isBound(cache, header, 0)) {
+        report.alreadyBound += 1
+        continue
+      }
+      let outcome: ProjectionRebind = 'failed'
+      try {
+        outcome = await rebindProjectionCache(host, header, header)
+      } catch {
+        outcome = 'failed'
+      }
+      if (outcome === 'failed' || outcome === 'unavailable') report.failed += 1
+      else report.repaired += 1
+    }
+  }
+  await Promise.all(Array.from({ length: Math.max(1, Math.min(concurrency, 8)) }, worker))
+  return report
+}

@@ -41,6 +41,16 @@
 - **`.dsh-client-store` 版本漂移**：客户端 `createSnapshotStore` 是构建期内联的，与宿主版本无关；
   已在 peer 声明里显式列出各版本区间。
 
+### 新增
+
+- **批量修复「旧版本留下的伤」**：`POST /api/dsh-edit-file-workspace/repair` + 设置卡工具栏按钮。
+  0.3.0 之前的版本改 `cwd` 时没有重建投影缓存，这些会话的缓存行身份永远失配 ——
+  表现为「未命名 + 创建时间」，且只有逐个打开才会自愈。现在一次请求按各自日志重折并写回，
+  **不动机任何日志、不改归属**；实时会话跳过（它们的投影本来就是实时算的）。
+
+  首次在真机（DSH 0.2.1-rc.2）上体检到的现状：83 个会话 / 冷会话 71 / 标题缺失 32 /
+  缓存未绑定 18 —— 这批「未绑定」正是旧版本造成的。
+
 ### 变更
 
 - 移动成功后不再强制整页刷新：客户端调用 `sessions.refresh()` 重新拉会话列表基线；
@@ -58,6 +68,9 @@
    `dsh-host-webserver` 的 `register` 等；0.2.1 只有内部实现变化）。
 - 新增 `scripts/check-dsh-version.mjs`（退出码 0/2/3/1）与 `docs/dsh-compat.json`（11 个契约文件指纹）。
 - peer 范围：`^0.2.0-rc.2 || ^0.2.1-rc.2`。
+- **真机验证（2026-10-18）**：DSH 桌面已升级到 `0.2.1-rc.2`，本插件在该版本上实测：
+  `selftest` → `listed=83 / normalized=83 / unreadable=0`；`describe` → `83 个会话、0 条 `sessionId:"undefined"``；
+  `sessionQuery` / `sessionProjectionCache` / `sessionProjections` 三个服务均在场。
 
 ### 工程
 

@@ -55,7 +55,8 @@ pnpm add dsh-edit-file-workspace
 - 列表按标题排序，可按标题 / 会话 ID / 路径筛选；
 - 每行右侧的下拉框选择目标工作区 → 立即迁移；
 - 「未分组」= 移出所有工作区（`cwd` 不变，只是从工作区记录里摘掉，重启后仍然有效）；
-- **正在使用的会话不能移动**（会拒绝），请先关闭或归档该会话。
+- **正在使用的会话不能移动**（会拒绝），请先关闭或归档该会话；
+- 工具栏的「**修复标题/时间缓存**」用于补救**旧版本留下的伤**：早期版本改 `cwd` 时没有重建缓存，那些会话会一直显示「未命名」+ 创建时间，点一次即可批量修好（日志与归属都不改动）。
 
 迁移成功后：设置卡列表刷新，侧栏会话列表也会重新拉一次基线（不需要整页刷新）。
 
@@ -68,6 +69,7 @@ pnpm add dsh-edit-file-workspace
 | `/api/dsh-edit-file-workspace/describe` | GET/POST | 工作区 + 会话清单（`{ ok, value: { workspaces, sessions } }`） |
 | `/api/dsh-edit-file-workspace/move` | POST | `{ sessionId, workspaceId \| path }` → 迁移并返回新的清单；`value.move.projection` 报告缓存重建结果 |
 | `/api/dsh-edit-file-workspace/selftest` | GET/POST | 只读体检：存储层形状、标题/时间缓存绑定情况、服务在位情况 |
+| `/api/dsh-edit-file-workspace/repair` | POST | 批量重建「未绑定」的元数据缓存（只改派生缓存，不碰日志） |
 
 ```powershell
 curl.exe -s -X POST http://127.0.0.1:<端口>/api/dsh-edit-file-workspace/selftest

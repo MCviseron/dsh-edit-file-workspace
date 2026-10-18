@@ -53,7 +53,8 @@ Settings → **Session Workspace Affiliation**:
 - filter by title / session id / path;
 - pick a target workspace in the row's dropdown → the move happens immediately;
 - *Ungrouped* removes the session from every workspace without touching `cwd` (it survives a restart);
-- **a live session cannot be moved** — close or archive it first.
+- **a live session cannot be moved** — close or archive it first;
+- the toolbar's *Repair title/time cache* undoes the damage older builds left behind: they changed `cwd` without re-checkpointing, so those sessions kept showing *Untitled* and their creation time. One click repairs all of them; no log or affiliation is touched.
 
 After a successful move the card refreshes and the DSH session list re-pulls its baseline (no page reload).
 
@@ -64,6 +65,7 @@ After a successful move the card refreshes and the DSH session list re-pulls its
 | `/api/dsh-edit-file-workspace/describe` | GET/POST | workspaces + sessions (`{ ok, value: { workspaces, sessions } }`) |
 | `/api/dsh-edit-file-workspace/move` | POST | `{ sessionId, workspaceId \| path }`; `value.move.projection` reports how the cache was re-bound |
 | `/api/dsh-edit-file-workspace/selftest` | GET/POST | read-only health report: storage shapes, title/time cache binding, mounted services |
+| `/api/dsh-edit-file-workspace/repair` | POST | rebuild every metadata checkpoint whose identity went stale (derived cache only, logs untouched) |
 
 All three require a loopback peer and same-origin Host.
 

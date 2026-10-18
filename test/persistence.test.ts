@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { findHeader, headerOf, listHeaders, locateLogPath } from '../src/persistence.ts'
-import { rebindProjectionCache } from '../src/projection.ts'
+import { rebindProjectionCache, repairProjectionCaches } from '../src/projection.ts'
 
 const header = { id: 'session-a', cwd: 'C:\\w', version: 4, createdAt: 1 }
 
@@ -105,4 +105,39 @@ test('reports unavailable without a projection cache and bound when already corr
   const already = { recordFor: () => ({ rows: {} }) }
   const host = { get: (name: string) => name === 'sessionProjectionCache' ? already : undefined }
   assert.equal(await rebindProjectionCache(host, header, header), 'bound')
+})
+
+function identityKey(header: { id: string; cwd?: string; version?: number; createdAt?: number }): string {
+  return JSON.stringify({ formatVersion: header.version, createdAt: header.createdAt, cwd: header.cwd, isSeeded: false, inheritedEventCount: 0 })
+}
+
+test('repair re-binds only the rows whose identity went stale', async () => {
+  const headers = [
+    { id: 'session-a', cwd: 'C:\\a', version: 4, createdAt: 1 },
+    { id: 'session-b', cwd: 'C:\\b', version: 4, createdAt: 2 },
+  ]
+  const bound = new Set<string>([identityKey(headers[0])])
+  const cache = {
+    recordFor: (_id: string, identity: unknown) => bound.has(JSON.stringify(identity)) ? { rows: {} } : undefined,
+    cachedSnapshot: () => undefined,
+    coldSnapshot: (header: { id: string; cwd?: string; version?: number; createdAt?: number }) => { bound.add(identityKey(header)) },
+    put: async () => {},
+  }
+  const host = {
+    get(name: string) {
+      if (name === 'sessionProjectionCache') return cache
+      if (name === 'sessionQuery') return { readSession: async (id: string) => ({ session: headers.find(h => h.id === id), inheritedEventCount: 0, events: [] }) }
+      return undefined
+    },
+  }
+
+  const report = await repairProjectionCaches(host, headers)
+
+  assert.deepEqual(report, { scanned: 2, repaired: 1, alreadyBound: 1, failed: 0 })
+  assert.equal(bound.has(identityKey(headers[1])), true)
+})
+
+test('repair reports every session as failed when there is no cache service', async () => {
+  const report = await repairProjectionCaches({ get: () => undefined }, [{ id: 'session-a', version: 4, createdAt: 1 }])
+  assert.deepEqual(report, { scanned: 1, repaired: 0, alreadyBound: 0, failed: 1 })
 })

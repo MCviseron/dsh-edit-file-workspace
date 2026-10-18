@@ -24,12 +24,21 @@ export interface MoveReport {
   projection: ProjectionRebind
 }
 
+/** Counts from a metadata-cache repair run. */
+export interface RepairReport {
+  scanned: number
+  repaired: number
+  alreadyBound: number
+  failed: number
+}
+
 export interface EditFileWorkspaceCardState {
   status: 'loading' | 'ready' | 'unavailable'
   workspaces: WorkspaceView[]
   sessions: SessionView[]
   notice?: { kind: 'ok' | 'error'; text: string }
   move?: MoveReport
+  repair?: RepairReport
 }
 
 /** Whether the caller still needs a full page reload to show the new grouping. */
@@ -41,16 +50,27 @@ export interface EditFileWorkspaceCardFace {
   }
   refresh(): Promise<void>
   move(sessionId: string, workspaceId: string | null): Promise<MoveOutcome>
+  repair(): Promise<void>
 }
+
+/** Busy sentinel for the toolbar's repair action (rows use session ids). */
+const REPAIR_KEY = '__repair__'
 
 const API = {
   describe: '/api/dsh-edit-file-workspace/describe',
   move: '/api/dsh-edit-file-workspace/move',
+  repair: '/api/dsh-edit-file-workspace/repair',
 } as const
 
 interface DescribeBody {
   ok?: boolean
   value?: { workspaces: WorkspaceView[]; sessions: SessionView[]; move?: MoveReport }
+  error?: string
+}
+
+interface RepairBody {
+  ok?: boolean
+  value?: RepairReport
   error?: string
 }
 
@@ -72,10 +92,10 @@ export class EditFileWorkspaceCardController {
       const body = await response.json() as DescribeBody
       if (body.ok !== true || body.value === undefined) throw new Error(body.error ?? 'describe failed')
       this.store.set({
+        ...this.store.getSnapshot(),
         status: 'ready',
         workspaces: body.value.workspaces,
         sessions: body.value.sessions,
-        notice: this.store.getSnapshot().notice,
       })
     } catch {
       this.store.set({ status: 'unavailable', workspaces: [], sessions: [] })
@@ -123,11 +143,35 @@ export class EditFileWorkspaceCardController {
     }
   }
 
+  /**
+   * Re-bind every cold session whose metadata cache no longer matches its header
+   * (sessions moved by a build that did not re-checkpoint them). Logs are never
+   * touched: only the derived cache row is rebuilt.
+   */
+  async repair(): Promise<void> {
+    try {
+      const response = await fetch(API.repair, { method: 'POST' })
+      const body = await response.json() as RepairBody
+      if (body.ok !== true || body.value === undefined) throw new Error(body.error ?? 'repair failed')
+      this.store.update((draft) => {
+        draft.repair = body.value
+        draft.notice = undefined
+      })
+      await this.refresh()
+      await this.refreshSessionList()
+    } catch (error) {
+      this.store.update((draft) => {
+        draft.notice = { kind: 'error', text: error instanceof Error ? error.message : String(error) }
+      })
+    }
+  }
+
   inject(): EditFileWorkspaceCardFace {
     return {
       hooks: { editFileWorkspaceCard: this.store },
       refresh: async () => { await this.refresh() },
       move: async (sessionId, workspaceId) => this.move(sessionId, workspaceId),
+      repair: async () => { await this.repair() },
     }
   }
 
@@ -320,6 +364,18 @@ export function EditFileWorkspaceCard(props: EditFileWorkspaceCardProps) {
           <button type="button" style={buttonStyle} onClick={() => { void props.refresh() }}>
             {t('settings.refresh')}
           </button>
+          <button
+            type="button"
+            style={buttonStyle}
+            disabled={busy === REPAIR_KEY}
+            onClick={() => {
+              setBusy(REPAIR_KEY)
+              setLocalError(null)
+              void props.repair().finally(() => { setBusy(null) })
+            }}
+          >
+            {busy === REPAIR_KEY ? t('settings.repairing') : t('settings.repairMetadata')}
+          </button>
         </div>
 
         {sessions.length === 0
@@ -371,6 +427,15 @@ export function EditFileWorkspaceCard(props: EditFileWorkspaceCardProps) {
 
         {localError !== null
           ? <p style={{ ...noticeStyle, color: 'var(--dsw-alias-label-error)' }} role="status">{t('settings.moveFailed') + ': ' + localError}</p>
+          : null}
+
+        {state.repair !== undefined
+          ? (
+            <p style={noticeStyle} role="status">
+              {t('settings.repairDone') + ' — ' + state.repair.repaired + '/' + state.repair.scanned
+                + (state.repair.failed > 0 ? ' · ' + t('settings.repairFailedCount') + ' ' + state.repair.failed : '')}
+            </p>
+          )
           : null}
 
         {noticeText !== undefined

@@ -11,12 +11,13 @@ import {
   type SessionPersistenceLike,
   type StoredSessionHeader,
 } from './persistence.ts'
-import { rebindProjectionCache, type ProjectionRebind } from './projection.ts'
+import { rebindProjectionCache, repairProjectionCaches, type ProjectionRebind, type RepairReport } from './projection.ts'
 
 export const EDIT_FILE_WORKSPACE_API = {
   describe: '/api/dsh-edit-file-workspace/describe',
   move: '/api/dsh-edit-file-workspace/move',
   selftest: '/api/dsh-edit-file-workspace/selftest',
+  repair: '/api/dsh-edit-file-workspace/repair',
 } as const
 
 const MAX_BODY_BYTES = 64 * 1024
@@ -275,6 +276,18 @@ async function selfTest(ctx: Context): Promise<Record<string, unknown>> {
   }
 }
 
+/**
+ * Re-bind the metadata checkpoint of every cold session whose header moved
+ * without its cache row (the damage an earlier plugin build left behind).
+ * Live sessions are skipped: their projections are computed live.
+ */
+async function repairColdProjections(ctx: Context): Promise<RepairReport> {
+  const anyCtx = ctx as any
+  const persistence = anyCtx.sessionPersistence as SessionPersistenceLike
+  const live = new Set(anyCtx.sessions.list().map((session: any) => String(session.id)))
+  const cold = (await listHeaders(persistence)).filter(header => !live.has(header.id))
+  return await repairProjectionCaches(anyCtx as { get(name: string): unknown }, cold)
+}
 export function makeEditFileWorkspaceRoutes(ctx: Context): WebRoute[] {
   const describe: WebRoute = {
     kind: 'exact',
@@ -322,5 +335,19 @@ export function makeEditFileWorkspaceRoutes(ctx: Context): WebRoute[] {
     },
   }
 
-  return [describe, move, selftest]
+  const repair: WebRoute = {
+    kind: 'exact',
+    path: EDIT_FILE_WORKSPACE_API.repair,
+    handler: async (req, res): Promise<void> => {
+      if (req.method !== 'POST') return json(res, 405, { ok: false, error: 'method-not-allowed' })
+      if (!isLoopbackRequest(req)) return json(res, 403, { ok: false, error: 'forbidden' })
+      try {
+        json(res, 200, { ok: true, value: await repairColdProjections(ctx) })
+      } catch (error) {
+        json(res, 500, { ok: false, error: error instanceof Error ? error.message : String(error) })
+      }
+    },
+  }
+
+  return [describe, move, selftest, repair]
 }

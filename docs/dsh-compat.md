@@ -8,7 +8,7 @@
 | DSH 桌面 | 宿主包版本 | 本插件 | 结论 | 依据 |
 | --- | --- | --- | --- | --- |
 | 0.2.0-rc.2 | `@deepseek-ai/dsh-*@0.2.0-rc.2` | 0.3.0 | ✅ 实测通过 | 本机真实安装，route + 日志改写 + 缓存身份全部核对 |
-| 0.2.1-rc.2 | `@deepseek-ai/dsh-*@0.2.1-rc.2` | 0.3.0 | ✅ 契约无变化 | 11 个契约文件逐个 sha256 比对；`SESSION_FORMAT_VERSION` 仍为 4 |
+| 0.2.1-rc.2 | `@deepseek-ai/dsh-*@0.2.1-rc.2` | 0.3.0 | ✅ **真机实测通过** | 11 个契约文件 sha256 比对无变化；且已在升级后的 0.2.1-rc.2 上跑通 `selftest`（83 条归一化 0 失败）与 `describe`（0 条 `undefined`） |
 | 0.1.5-rc.2（CLI） | `@deepseek-ai/dsh-*@0.1.5-rc.2` | 未验证 | ⚠️ 仅供参照 | 投影缓存的 `cachedSnapshot(meta, inheritedEventCount, keys)` 多一个参数，本插件按 0.2.x 的 `cachedSnapshot(meta)` 调用（多传参数无害，但未实测） |
 
 ## 依赖的契约面
@@ -76,6 +76,22 @@ node scripts/check-dsh-version.mjs
 
 # 3) 真机验收（见下）
 ```
+
+## 真机验收记录
+
+**2026-10-18 · DSH 桌面 0.2.1-rc.2**（升级后首次体检）
+
+```json
+{"persistence":{"listed":83,"normalized":83,"unreadable":0},
+ "sessions":{"live":12,"cold":71,"titled":51,"titleMissing":32,"projectionBound":41,"projectionUnbound":18},
+ "workspaces":18,
+ "services":{"sessionQuery":true,"sessionProjectionCache":true,"sessionProjections":true}}
+```
+
+- `unreadable: 0` → 存储层形状归一化在 0.2.1 上成立（旧版此处会把全部历史会话压成一条 `undefined`）；
+- `describe` 的 83 条会话里 **0 条 `sessionId:"undefined"`**；
+- `projectionUnbound: 18` 是**旧版本留下的历史伤**（改 `cwd` 时没重建缓存），
+  用设置卡的「修复标题/时间缓存」（`POST /repair`）可批量修好；`titleMissing: 32` 里含确实从未命名过的会话。
 
 ## 真机验收清单（升级 DSH 之后）
 
