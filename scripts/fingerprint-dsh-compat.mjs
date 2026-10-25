@@ -23,7 +23,7 @@ const TRACKED = {
   'dsh-host-webserver': ['lib/index.js'],
   'dsh-session': ['lib/index.js'],
   'dsh-client-store': ['lib/index.js'],
-  'dsh-client-ui-slots': ['lib/client.js'],
+  'dsh-client-ui-slots': ['lib/index.js'],
   'dsh-client-locale': ['lib/client.js'],
 }
 

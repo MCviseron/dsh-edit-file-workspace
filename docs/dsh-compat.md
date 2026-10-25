@@ -8,6 +8,7 @@
 | DSH 桌面 | 宿主包版本 | 本插件 | 结论 | 依据 |
 | --- | --- | --- | --- | --- |
 | 0.2.0-rc.2 | `@deepseek-ai/dsh-*@0.2.0-rc.2` | 0.3.0 | ✅ 实测通过 | 本机真实安装，route + 日志改写 + 缓存身份全部核对 |
+| 0.2.1-rc.3 | `@deepseek-ai/dsh-*@0.2.1-rc.3` | 0.3.0 | ✅ 契约无变化 | 11 个契约文件与 rc.2 **逐字节相同**（本机仍是 rc.2，未装 rc.3，故为指纹结论） |
 | 0.2.1-rc.2 | `@deepseek-ai/dsh-*@0.2.1-rc.2` | 0.3.0 | ✅ **真机实测通过** | 11 个契约文件 sha256 比对无变化；且已在升级后的 0.2.1-rc.2 上跑通 `selftest`（83 条归一化 0 失败）与 `describe`（0 条 `undefined`） |
 | 0.1.5-rc.2（CLI） | `@deepseek-ai/dsh-*@0.1.5-rc.2` | 未验证 | ⚠️ 仅供参照 | 投影缓存的 `cachedSnapshot(meta, inheritedEventCount, keys)` 多一个参数，本插件按 0.2.x 的 `cachedSnapshot(meta)` 调用（多传参数无害，但未实测） |
 
@@ -41,6 +42,14 @@
 | `dsh-client-*` | `ui-settings`/`ui-renderer` 内部（偏好持久化、槽位渲染更宽容） | 无 |
 
 > 结论：0.2.1-rc.2 上**不需要改代码**，只需要把 peer 范围与指纹基线补上。
+
+### 0.2.1-rc.2 → 0.2.1-rc.3（2026-10-25 核对）
+
+11 个契约文件**逐字节相同**，`SESSION_FORMAT_VERSION` 仍为 4 → 同样无需改代码。
+
+> 工具的自我修正：本仓库的指纹表曾把 `dsh-client-ui-slots` 记为 `lib/client.js`，
+> 而该包在 0.2.x 里只有 `lib/index.js`（`lib/client.js` 从未存在）→ 每周检查会误报
+> `review-required`。已改为 `lib/index.js` 并补齐三个版本的值（三版哈希一致：`57e1314e31a2015f`）。
 
 ## 指纹机制
 

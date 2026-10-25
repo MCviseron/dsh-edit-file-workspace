@@ -68,6 +68,10 @@
    `dsh-host-webserver` 的 `register` 等；0.2.1 只有内部实现变化）。
 - 新增 `scripts/check-dsh-version.mjs`（退出码 0/2/3/1）与 `docs/dsh-compat.json`（11 个契约文件指纹）。
 - peer 范围：`^0.2.0-rc.2 || ^0.2.1-rc.2`。
+- **0.2.1-rc.3 核对（2026-10-25）**：11 个契约文件与 rc.2 逐字节相同 → 无需改代码；
+  `0.2.1-rc.3` 已被 `^0.2.1-rc.2` 这个 peer 段覆盖（semver 实测 `satisfies('0.2.1-rc.3','^0.2.1-rc.2') = true`）。
+- **工具修正**：指纹表曾把 `dsh-client-ui-slots` 记为 `lib/client.js`（0.2.x 里只有 `lib/index.js`），
+  导致周检误报 `review-required`；已修正并补齐三版指纹。
 - **真机验证（2026-10-18）**：DSH 桌面已升级到 `0.2.1-rc.2`，本插件在该版本上实测：
   `selftest` → `listed=83 / normalized=83 / unreadable=0`；`describe` → `83 个会话、0 条 `sessionId:"undefined"``；
   `sessionQuery` / `sessionProjectionCache` / `sessionProjections` 三个服务均在场。
